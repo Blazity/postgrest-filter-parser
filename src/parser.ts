@@ -1,5 +1,23 @@
-import { anyStringOf, string } from "parjs";
-import { map, then } from "parjs/combinators";
+import {
+  anyStringOf,
+  string,
+  int,
+  regexp,
+  whitespace,
+  rest,
+  noCharOf,
+  float
+} from "parjs";
+import {
+  map,
+  then,
+  maybe,
+  or,
+  recover,
+  between,
+  many,
+  manySepBy
+} from "parjs/combinators";
 
 enum LogicOperator {
   "and" = "and",
@@ -65,12 +83,120 @@ const parseOperator = anyStringOf(...Object.getOwnPropertyNames(Operator)).pipe(
   map(op => op as Operator)
 );
 
+const parseValue = int();
+// TODO: Make sure this matches PostgreSQL?
+const parseIdentifier = regexp(/[A-Za-z_][A-Za-z_0-9]*/).pipe(
+  map(x => x.join())
+);
+
 const parseSeparator = string(SEPARATOR);
 const parseNegation = string(Operator.not);
 
-const parseIdentifier = string("unimplemented_id");
-const parseValue = string("unimplemented_v");
+const parseOperatorNegation = maybe<[string, string]>()(
+  parseNegation.pipe(then(parseSeparator))
+)
+  .pipe(map(Boolean))
+  // Don't consume the input if it doesn't match
+  .pipe(or(string("")))
+  .pipe(recover(() => ({ kind: "OK", value: false })));
 
-const parseCondition = parseIdentifier.pipe(
-  then(parseSeparator, parseOperator, parseSeparator, parseValue)
+const parseOperatorIdentifier = parseIdentifier
+  .pipe(then(parseSeparator))
+  .pipe(map(x => (x instanceof Array ? x[0] : null)))
+  // Make it not consume the input if it doesn't match
+  .pipe(or(string("")))
+  .pipe(recover(() => ({ kind: "OK", value: "" })));
+
+interface Condition {
+  operator: Operator;
+  value: string;
+}
+
+interface Including<T> {
+  kind: "including";
+  value: T;
+}
+
+interface Excluding<T> {
+  kind: "excluding";
+  value: T;
+}
+
+interface Range<T> {
+  left: Including<T> | Excluding<T>;
+  right: Including<T> | Excluding<T>;
+}
+
+const parseQuotedString = noCharOf('"')
+  .pipe(many())
+  .pipe(between('"'))
+  .pipe(between(whitespace()))
+  .pipe(map(x => x.join("")));
+
+const parseNumeric = float().pipe(between(whitespace()));
+/**
+ * Parses a contiguous string which does not contain either of:
+ * `,`, `.`, `:`, `()`.
+ * See https://postgrest.org/en/v5.2/api.html#reserved-characters
+ */
+const parseContiguousTupleElement = noCharOf(" ,.:()").pipe(
+  many(),
+  map(x => x.join(""))
 );
+const parseCollectionElement = parseQuotedString.pipe(
+  or(parseNumeric, parseContiguousTupleElement)
+);
+
+const parseOpenRange = string("(").pipe(or("["));
+const parseEndRange = string(")").pipe(or("]"));
+
+const parseRange = parseOpenRange
+  .pipe(
+    then(parseCollectionElement, ",", parseCollectionElement, parseEndRange)
+  )
+  .pipe(
+    map(
+      ([opening, left, comma, right, ending]) =>
+        ({
+          left: {
+            kind: opening === "[" ? "including" : "excluding",
+            value: left
+          },
+          right: {
+            kind: ending === "]" ? "including" : "excluding",
+            value: right
+          }
+        } as Range<string | number>)
+    )
+  );
+
+string("(")
+  .pipe(then(parseCollectionElement, ",", parseCollectionElement, ")"))
+  .pipe(
+    map(([lbrace, left, comma, right, rbrace]) => ({ start: left, end: right }))
+  );
+
+const parseCollectionElements = parseCollectionElement.pipe(
+  between(whitespace()),
+  manySepBy(",")
+);
+
+export const parseArray = parseCollectionElements
+  .pipe(between("{", "}"))
+  .pipe(or(parseCollectionElements.pipe(between("(", ")"))));
+
+/**
+ * Parser the remaining input as string. NOTE: This is probably not what you
+ * want as this will greedily consume everything until the end.
+ */
+const parseString = rest();
+
+const parsePositiveCondition = parseOperator
+  .pipe(then(parseSeparator, parseValue))
+  .pipe(map(([operator, _, value]) => ({ operator, value })));
+
+export const parseCondition = parseOperatorNegation.pipe(
+  then(parseOperatorIdentifier, parsePositiveCondition)
+);
+
+const parseOperand = parseCollectionElement.pipe(or(parseRange, parseArray));

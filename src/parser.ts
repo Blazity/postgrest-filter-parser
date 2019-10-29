@@ -204,8 +204,17 @@ const parsePositiveCondition = parseOperator
   .pipe(then(parseSeparator, parseValue))
   .pipe(map(([operator, _, value]) => ({ operator, value })));
 
-export const parseCondition = parseOperatorNegation.pipe(
-  then(parseOperatorIdentifier, parsePositiveCondition)
+const parseCondition = parseOperatorNegation.pipe(
+  then(parsePositiveCondition),
+  map(([negated, rest]) => ({ negated, ...rest }))
 );
+
+export const parseEntireCondition =
+  // Resolve ambiguities, e.g. `not.eq.20` as negated operator
+  string("")
+    .pipe(then(parseCondition))
+    // ...rather than just a regular identifier "not"
+    .pipe(or(parseOperatorIdentifier.pipe(then(parseCondition))))
+    .pipe(map(([ident, cond]) => [ident, cond] as [string, Condition]));
 
 const parseOperand = parseCollectionElement.pipe(or(parseRange, parseArray));

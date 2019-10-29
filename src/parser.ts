@@ -19,12 +19,12 @@ import {
   manySepBy
 } from "parjs/combinators";
 
-enum LogicOperator {
+export enum LogicOperator {
   "and" = "and",
   "or" = "or"
 }
 
-enum Operator {
+export enum Operator {
   /** `=` equals */
   "eq" = "eq",
   /** `>` greater than */
@@ -92,7 +92,7 @@ const parseIdentifier = regexp(/[A-Za-z_][A-Za-z_0-9]*/).pipe(
 const parseSeparator = string(SEPARATOR);
 const parseNegation = string(Operator.not);
 
-const parseOperatorNegation = maybe<[string, string]>()(
+export const parseOperatorNegation = maybe<[string, string]>()(
   parseNegation.pipe(then(parseSeparator))
 )
   .pipe(map(Boolean))
@@ -100,29 +100,30 @@ const parseOperatorNegation = maybe<[string, string]>()(
   .pipe(or(string("")))
   .pipe(recover(() => ({ kind: "OK", value: false })));
 
-const parseOperatorIdentifier = parseIdentifier
+export const parseOperatorIdentifier = parseIdentifier
   .pipe(then(parseSeparator))
   .pipe(map(x => (x instanceof Array ? x[0] : null)))
   // Make it not consume the input if it doesn't match
   .pipe(or(string("")))
   .pipe(recover(() => ({ kind: "OK", value: "" })));
 
-interface Condition {
+export interface Condition {
+  negated: boolean;
   operator: Operator;
-  value: string;
+  value: number;
 }
 
-interface Including<T> {
+export interface Including<T> {
   kind: "including";
   value: T;
 }
 
-interface Excluding<T> {
+export interface Excluding<T> {
   kind: "excluding";
   value: T;
 }
 
-interface Range<T> {
+export interface Range<T> {
   left: Including<T> | Excluding<T>;
   right: Including<T> | Excluding<T>;
 }

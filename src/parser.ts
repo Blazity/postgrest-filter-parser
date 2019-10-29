@@ -1,13 +1,11 @@
 import {
   anyStringOf,
   string,
-  int,
   regexp,
   whitespace,
-  rest,
   noCharOf,
   float,
-  anyCharOf
+  Parjser
 } from "parjs";
 import {
   map,
@@ -19,10 +17,10 @@ import {
   many,
   manySepBy,
   composeCombinator,
-  manyTill
+  later
 } from "parjs/combinators";
 
-export enum LogicOperator {
+export enum LogicalOperator {
   "and" = "and",
   "or" = "or"
 }
@@ -30,14 +28,14 @@ export enum LogicOperator {
 export enum Operator {
   /** `=` equals */
   "eq" = "eq",
-  /** `>` greater than */
-  "gt" = "gt",
   /** `>=` greater than or equal */
   "gte" = "gte",
-  /** `<` less than */
-  "lt" = "lt",
+  /** `>` greater than */
+  "gt" = "gt",
   /** `<=` less than or equal */
   "lte" = "lte",
+  /** `<` less than */
+  "lt" = "lt",
   /** `<>` or `!=` not equal */
   "neq" = "neq",
   /** `LIKE` LIKE operator (use * in place of %) */
@@ -79,14 +77,13 @@ export enum Operator {
 const SEPARATOR = ".";
 
 const parseLogicalOperator = anyStringOf(
-  ...Object.getOwnPropertyNames(LogicOperator)
-).pipe(map(op => op as LogicOperator));
+  ...Object.getOwnPropertyNames(LogicalOperator)
+).pipe(map(op => op as LogicalOperator));
 
 const parseOperator = anyStringOf(...Object.getOwnPropertyNames(Operator)).pipe(
   map(op => op as Operator)
 );
 
-const parseValue = int();
 // TODO: Make sure this matches PostgreSQL?
 const parseIdentifier = regexp(/[A-Za-z_][A-Za-z_0-9]*/).pipe(
   map(x => x.join())
@@ -106,13 +103,15 @@ function consumeOrDefault<T>(value: T) {
   );
 }
 
-export const parseOperatorNegation = maybe<[string, string]>()(
+/** Optionally parses a `not.` operator negation */
+const parseOperatorNegation = maybe<[string, string]>()(
   parseNegation.pipe(then(parseSeparator))
 )
   .pipe(map(Boolean))
   .pipe(consumeOrDefault(false));
 
-export const parseOperatorIdentifier = parseIdentifier
+/** Optionally parses a `<ident>.` (not separated by quotes) */
+const parseOperatorIdentifier = parseIdentifier
   .pipe(then(parseSeparator))
   .pipe(map(([ident, sep]) => ident))
   .pipe(consumeOrDefault(""));
@@ -120,11 +119,30 @@ export const parseOperatorIdentifier = parseIdentifier
 export type Primitive = string | number;
 export type Operand = Primitive | Primitive[] | Range<Primitive>;
 
+/**
+ * Single condition expression
+ * @example `not.eq.20` or `some_ident.not.gte.50`
+ */
 export interface Condition {
+  ident?: string;
+
   negated: boolean;
   operator: Operator;
   value: Operand;
 }
+
+/**
+ * Logical expression (`and`, `or`)
+ * @example `or(a.gte.100, a.lte 50)`
+ */
+export interface LogicalCondition {
+  negated: boolean;
+  operator: LogicalOperator;
+  value: (Condition | LogicalCondition)[];
+}
+
+/** Main expression type */
+export type Filter = Condition | LogicalCondition;
 
 export interface Including<T> {
   kind: "including";
@@ -136,6 +154,10 @@ export interface Excluding<T> {
   value: T;
 }
 
+/**
+ * Type that can represent a generic left-{open, closed} and
+ * right-{open, closed} range
+ */
 export interface Range<T> {
   left: Including<T> | Excluding<T>;
   right: Including<T> | Excluding<T>;
@@ -157,17 +179,16 @@ const parseContiguousTupleElement = noCharOf(" ,.:(){}[]").pipe(
   many(),
   map(x => x.join(""))
 );
-const parseCollectionElement = parseQuotedString.pipe(
+
+export const parsePrimitive: Parjser<Primitive> = parseQuotedString.pipe(
   or(parseNumeric, parseContiguousTupleElement)
 );
 
 const parseOpenRange = string("(").pipe(or("["));
 const parseEndRange = string(")").pipe(or("]"));
 
-const parseRange = parseOpenRange
-  .pipe(
-    then(parseCollectionElement, ",", parseCollectionElement, parseEndRange)
-  )
+export const parseRange = parseOpenRange
+  .pipe(then(parsePrimitive, ",", parsePrimitive, parseEndRange))
   .pipe(
     map(
       ([opening, left, comma, right, ending]) =>
@@ -184,7 +205,7 @@ const parseRange = parseOpenRange
     )
   );
 
-const parseCollectionElements = parseCollectionElement.pipe(
+const parseCollectionElements = parsePrimitive.pipe(
   between(whitespace()),
   manySepBy(",")
 );
@@ -193,31 +214,57 @@ export const parseArray = parseCollectionElements
   .pipe(between("{", "}"))
   .pipe(or(parseCollectionElements.pipe(between("(", ")"))));
 
-/**
- * Parser the remaining input as string. NOTE: This is probably not what you
- * want as this will greedily consume everything until the end.
- */
-const parseString = rest();
-
-export const parseOperand = parseRange
-  // TODO: Make sure that's desirable (it can be, since it may be hard to match
-  // all those curly and square braces)
-  .pipe(recover(st => ({ kind: "Soft" })))
-  .pipe(or(parseArray, parseCollectionElement));
+const parseOperand: Parjser<Operand> = parseRange
+  // If we can't parse a range, backtrack and try to parse as array (since these
+  // can be parsed similarly)
+  .pipe(recover<Range<string | number>>(st => ({ kind: "Soft" })))
+  .pipe(or(parseArray, parsePrimitive));
 
 const parsePositiveCondition = parseOperator
   .pipe(then(parseSeparator, parseOperand))
   .pipe(map(([operator, _, value]) => ({ operator, value })));
 
-const parseCondition = parseOperatorNegation.pipe(
+const parseConditionShorthand = parseOperatorNegation.pipe(
   then(parsePositiveCondition),
   map(([negated, rest]) => ({ negated, ...rest }))
 );
 
-export const parseEntireCondition =
+export const parseCondition =
   // Resolve ambiguities, e.g. `not.eq.20` as negated operator
   string("")
-    .pipe(then(parseCondition))
+    .pipe(then(parseConditionShorthand))
     // ...rather than just a regular identifier "not"
-    .pipe(or(parseOperatorIdentifier.pipe(then(parseCondition))))
-    .pipe(map(([ident, cond]) => [ident, cond] as [string, Condition]));
+    .pipe(or(parseOperatorIdentifier.pipe(then(parseConditionShorthand))))
+    .pipe(
+      map(([ident, cond]) => (ident ? { ident, ...cond } : (cond as Condition)))
+    );
+
+/**
+ * Main filter tree parser, parses a condition or a logically {con,dis}joined
+ * condition tree
+ */
+export const parseFilter = later<Condition | LogicalCondition>();
+
+const parseFilterList = parseFilter.pipe(
+  between(whitespace()),
+  manySepBy(",")
+);
+
+export const parseLogicExpr = parseOperatorNegation.pipe(
+  then(
+    parseLogicalOperator.pipe(then(parseFilterList.pipe(between("(", ")"))))
+  ),
+  map(
+    ([negated, [operator, value]]) =>
+      ({ negated, operator, value } as LogicalCondition)
+  )
+);
+
+parseFilter.init(
+  parseCondition.pipe(
+    recover<Condition>(st => ({ kind: "Soft" })),
+    or(parseLogicExpr)
+  )
+);
+
+export default parseFilter;

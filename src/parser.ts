@@ -6,7 +6,8 @@ import {
   whitespace,
   rest,
   noCharOf,
-  float
+  float,
+  anyCharOf
 } from "parjs";
 import {
   map,
@@ -17,7 +18,8 @@ import {
   between,
   many,
   manySepBy,
-  composeCombinator
+  composeCombinator,
+  manyTill
 } from "parjs/combinators";
 
 export enum LogicOperator {
@@ -115,10 +117,13 @@ export const parseOperatorIdentifier = parseIdentifier
   .pipe(map(([ident, sep]) => ident))
   .pipe(consumeOrDefault(""));
 
+export type Primitive = string | number;
+export type Operand = Primitive | Primitive[] | Range<Primitive>;
+
 export interface Condition {
   negated: boolean;
   operator: Operator;
-  value: number;
+  value: Operand;
 }
 
 export interface Including<T> {
@@ -148,7 +153,7 @@ const parseNumeric = float().pipe(between(whitespace()));
  * `,`, `.`, `:`, `()`.
  * See https://postgrest.org/en/v5.2/api.html#reserved-characters
  */
-const parseContiguousTupleElement = noCharOf(" ,.:()").pipe(
+const parseContiguousTupleElement = noCharOf(" ,.:(){}[]").pipe(
   many(),
   map(x => x.join(""))
 );
@@ -179,12 +184,6 @@ const parseRange = parseOpenRange
     )
   );
 
-string("(")
-  .pipe(then(parseCollectionElement, ",", parseCollectionElement, ")"))
-  .pipe(
-    map(([lbrace, left, comma, right, rbrace]) => ({ start: left, end: right }))
-  );
-
 const parseCollectionElements = parseCollectionElement.pipe(
   between(whitespace()),
   manySepBy(",")
@@ -200,8 +199,14 @@ export const parseArray = parseCollectionElements
  */
 const parseString = rest();
 
+export const parseOperand = parseRange
+  // TODO: Make sure that's desirable (it can be, since it may be hard to match
+  // all those curly and square braces)
+  .pipe(recover(st => ({ kind: "Soft" })))
+  .pipe(or(parseArray, parseCollectionElement));
+
 const parsePositiveCondition = parseOperator
-  .pipe(then(parseSeparator, parseValue))
+  .pipe(then(parseSeparator, parseOperand))
   .pipe(map(([operator, _, value]) => ({ operator, value })));
 
 const parseCondition = parseOperatorNegation.pipe(
@@ -216,5 +221,3 @@ export const parseEntireCondition =
     // ...rather than just a regular identifier "not"
     .pipe(or(parseOperatorIdentifier.pipe(then(parseCondition))))
     .pipe(map(([ident, cond]) => [ident, cond] as [string, Condition]));
-
-const parseOperand = parseCollectionElement.pipe(or(parseRange, parseArray));

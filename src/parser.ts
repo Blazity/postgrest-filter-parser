@@ -16,7 +16,8 @@ import {
   recover,
   between,
   many,
-  manySepBy
+  manySepBy,
+  composeCombinator
 } from "parjs/combinators";
 
 export enum LogicOperator {
@@ -92,20 +93,27 @@ const parseIdentifier = regexp(/[A-Za-z_][A-Za-z_0-9]*/).pipe(
 const parseSeparator = string(SEPARATOR);
 const parseNegation = string(Operator.not);
 
+/**
+ * If the Parser softly fails, then it acts as if it parsed successfully with
+ * `value` and backtracks to the previous position.
+ */
+function consumeOrDefault<T>(value: T) {
+  return composeCombinator(
+    or(string("")),
+    recover(() => ({ kind: "OK", value }))
+  );
+}
+
 export const parseOperatorNegation = maybe<[string, string]>()(
   parseNegation.pipe(then(parseSeparator))
 )
   .pipe(map(Boolean))
-  // Don't consume the input if it doesn't match
-  .pipe(or(string("")))
-  .pipe(recover(() => ({ kind: "OK", value: false })));
+  .pipe(consumeOrDefault(false));
 
 export const parseOperatorIdentifier = parseIdentifier
   .pipe(then(parseSeparator))
-  .pipe(map(x => (x instanceof Array ? x[0] : null)))
-  // Make it not consume the input if it doesn't match
-  .pipe(or(string("")))
-  .pipe(recover(() => ({ kind: "OK", value: "" })));
+  .pipe(map(([ident, sep]) => ident))
+  .pipe(consumeOrDefault(""));
 
 export interface Condition {
   negated: boolean;

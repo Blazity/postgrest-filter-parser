@@ -133,7 +133,7 @@ export interface Condition {
 
 /**
  * Logical expression (`and`, `or`)
- * @example `or(a.gte.100, a.lte 50)`
+ * @example `or(a.gte.100, a.lte.50)`
  */
 export interface LogicalCondition {
   negated: boolean;

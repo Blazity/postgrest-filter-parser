@@ -9,7 +9,8 @@
   "license": "MIT",
   "scripts": {
     "start": "ts-node src/index.ts",
-    "test": "jest"
+    "test": "jest",
+    "prepack": "tsc"
   },
   "dependencies": {
     "parjs": "^0.12.2"

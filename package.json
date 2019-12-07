@@ -1,6 +1,6 @@
 {
   "name": "@blazity/postgrest-filter-parser",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Parser for PostgREST 5.x filter expressions",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

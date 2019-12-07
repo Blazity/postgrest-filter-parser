@@ -7,7 +7,7 @@ import parseFilter, {
   parseRange,
   LogicalOperator,
   Filter
-} from "../parser";
+} from "../src/parser";
 import {
   printOperator,
   printPrimitive,
@@ -15,7 +15,7 @@ import {
   printRangeOfPrimitives,
   printLogicalOperator,
   printFilter
-} from "../printer";
+} from "../src/printer";
 
 test("Primitives", () => {
   expect(printPrimitive(123)).toBe("123");

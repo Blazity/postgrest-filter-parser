@@ -1,5 +1,5 @@
-import * as Parser from "../parser";
-import { Operator, Operand } from "../parser";
+import * as Parser from "../src/parser";
+import { Operator, Operand } from "../src/parser";
 import { Parjser } from "parjs";
 
 type TestCase<T> = [string, T];

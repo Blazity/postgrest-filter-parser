@@ -6,7 +6,8 @@ import {
   Operator,
   Range,
   Primitive,
-  LogicalCondition
+  LogicalCondition,
+  isLogicalCondition
 } from "./parser";
 
 export function printPrimitive(val: Primitive): string {
@@ -54,10 +55,6 @@ export function printRangeOfPrimitives(val: Range<Primitive>): string {
 }
 
 export function printFilter(val: Filter): string {
-  function isLogicalCondition(cond: Filter): cond is LogicalCondition {
-    return cond.operator in LogicalOperator;
-  }
-
   return isLogicalCondition(val)
     ? printLogicalCondition(val)
     : printCondition(val);

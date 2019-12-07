@@ -144,6 +144,10 @@ export interface LogicalCondition {
 /** Main expression type */
 export type Filter = Condition | LogicalCondition;
 
+export function isLogicalCondition(cond: Filter): cond is LogicalCondition {
+  return cond.operator in LogicalOperator;
+}
+
 export interface Including<T> {
   kind: "including";
   value: T;

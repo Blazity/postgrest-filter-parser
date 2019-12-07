@@ -4,7 +4,7 @@
   "description": "Parser for PostgREST 5.x filter expressions",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "repository": "git://github.com/Blazity/postgrest-filter-parser.git",
+  "repository": "https://github.com/Blazity/postgrest-filter-parser.git",
   "author": "Igor Matuszewski <xanewok@gmail.com>",
   "license": "MIT",
   "scripts": {

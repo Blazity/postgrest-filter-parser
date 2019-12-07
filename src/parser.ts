@@ -138,7 +138,7 @@ export interface Condition {
 export interface LogicalCondition {
   negated: boolean;
   operator: LogicalOperator;
-  value: (Condition | LogicalCondition)[];
+  value: Filter[];
 }
 
 /** Main expression type */
@@ -239,7 +239,7 @@ export const parseCondition =
       map(([ident, cond]) => (ident ? { ident, ...cond } : (cond as Condition)))
     );
 
-const _parseFilter = later<Condition | LogicalCondition>();
+const _parseFilter = later<Filter>();
 
 const parseFilterList = _parseFilter.pipe(
   between(whitespace()),
@@ -267,5 +267,5 @@ _parseFilter.init(
  * Main filter tree parser, parses a condition or a logically {con,dis}joined
  * condition tree
  */
-export const parseFilter: Parjser<Condition | LogicalCondition> = _parseFilter;
+export const parseFilter: Parjser<Filter> = _parseFilter;
 export default parseFilter;

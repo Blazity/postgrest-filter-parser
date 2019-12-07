@@ -239,13 +239,9 @@ export const parseCondition =
       map(([ident, cond]) => (ident ? { ident, ...cond } : (cond as Condition)))
     );
 
-/**
- * Main filter tree parser, parses a condition or a logically {con,dis}joined
- * condition tree
- */
-export const parseFilter = later<Condition | LogicalCondition>();
+const _parseFilter = later<Condition | LogicalCondition>();
 
-const parseFilterList = parseFilter.pipe(
+const parseFilterList = _parseFilter.pipe(
   between(whitespace()),
   manySepBy(",")
 );
@@ -260,11 +256,16 @@ export const parseLogicExpr = parseOperatorNegation.pipe(
   )
 );
 
-parseFilter.init(
+_parseFilter.init(
   parseCondition.pipe(
     recover<Condition>(st => ({ kind: "Soft" })),
     or(parseLogicExpr)
   )
 );
 
+/**
+ * Main filter tree parser, parses a condition or a logically {con,dis}joined
+ * condition tree
+ */
+export const parseFilter: Parjser<Condition | LogicalCondition> = _parseFilter;
 export default parseFilter;

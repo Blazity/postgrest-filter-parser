@@ -16,7 +16,7 @@
     "prepack": "tsc"
   },
   "dependencies": {
-    "parjs": "^0.12.2"
+    "parjs": "=0.12.2"
   },
   "devDependencies": {
     "@types/jest": "^24.0.20",

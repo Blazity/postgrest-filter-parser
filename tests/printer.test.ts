@@ -53,11 +53,15 @@ test("Conditions", () => {
       operator: Operator.eq,
       value: 20
     },
-    "cs.{example,new}": {
+    "cs.(example,new)": {
       negated: false,
       operator: Operator.cs,
-      value: ["example", "new"]
+      value: {
+        left: { kind: "excluding", value: "example" },
+        right: { kind: "excluding", value: "new" }
+      }
     },
+    // FIXME: PostgREST's 'in' operator supports parentheses-wrapped lists only, so this behaviour is incorrect
     "in.[1,2]": {
       negated: false,
       operator: Operator.in,
@@ -65,6 +69,11 @@ test("Conditions", () => {
         left: { kind: "including", value: 1 },
         right: { kind: "including", value: 2 }
       }
+    },
+    "in.(1,2,3)": {
+      negated: false,
+      operator: Operator.in,
+      value: [1, 2, 3]
     }
   };
 

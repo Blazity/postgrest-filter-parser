@@ -23,8 +23,8 @@ export function printLogicalOperator(val: LogicalOperator): string {
 }
 
 function printArrayOfPrimitives(val: Primitive[]): string {
-  // Normalize to curly braces
-  return `{${val.map(printPrimitive).join(",")}}`;
+  // Normalize to parentheses
+  return `(${val.map(printPrimitive).join(",")})`;
 }
 
 export function printOperand(val: Operand): string {
